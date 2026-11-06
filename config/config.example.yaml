@@ -1,0 +1,43 @@
+# Copy to config.yaml and calibrate on the bench.
+i2c:
+  bus: 1
+  mcp4728_address: 0x60
+
+gpio:
+  dir_fl: 17
+  dir_fr: 27
+  dir_rl: 22
+  dir_rr: 23
+  estop_en: 24
+  status_led: 25
+
+# DAC full-scale voltage (MCP4728 VDD).
+dac_vdd_volts: 5.0
+
+# Per-wheel throttle calibration (volts on SIG).
+# Many e-bike controllers: start ~1.1 V, full ~4.2 V.
+throttle:
+  v_idle: 0.0
+  v_start: 1.1
+  v_max: 4.2
+
+# Seconds to wait at zero speed before flipping reverse.
+direction_change_delay_s: 0.35
+
+# Clamp |v| and |w| in tank drive.
+drive:
+  max_speed: 1.0
+  max_turn: 1.0
+
+harness:
+  notes: "Update after multimeter check — see docs/harness.md"
+  throttle_sig_colors:
+    fl: unknown
+    fr: unknown
+    rl: unknown
+    rr: unknown
+  reverse_pair_colors:
+    fl: unknown
+    fr: unknown
+    rl: unknown
+    rr: unknown

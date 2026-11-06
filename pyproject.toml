@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grasscutter"
+version = "0.1.0"
+description = "Raspberry Pi control for 4× JRAHK Double Row 18 Tubes BLDC cart"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "PyYAML>=6.0",
+  "smbus2>=0.4.3",
+]
+
+[project.optional-dependencies]
+pi = ["RPi.GPIO>=0.7.1"]
+
+[project.scripts]
+grasscutter = "grasscutter.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["grasscutter*"]
