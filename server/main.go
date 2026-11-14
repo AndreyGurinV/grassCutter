@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -21,6 +22,7 @@ func main() {
 	binArgs := flag.String("bin-args", envOr("GRASSCUTTER_BIN_ARGS", ""), "extra args before subcommand (e.g. '-m grasscutter.cli')")
 	mock := flag.Bool("mock", envBool("GRASSCUTTER_MOCK"), "force mock I2C/GPIO")
 	timeout := flag.Duration("timeout", 60*time.Second, "default CLI command timeout")
+	staticDir := flag.String("static", envOr("GRASSCUTTER_STATIC", defaultStaticDir()), "web UI static files directory (empty to disable)")
 	flag.Parse()
 
 	runner := cli.NewRunner(cli.Options{
@@ -30,7 +32,15 @@ func main() {
 		Timeout: *timeout,
 	})
 	defer runner.Close()
-	srv := api.New(runner)
+
+	static := strings.TrimSpace(*staticDir)
+	if static != "" {
+		if st, err := os.Stat(static); err != nil || !st.IsDir() {
+			log.Printf("static UI dir %q not found — API only", static)
+			static = ""
+		}
+	}
+	srv := api.New(runner, api.Options{StaticDir: static})
 
 	httpServer := &http.Server{
 		Addr:              *addr,
@@ -39,7 +49,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("grasscutter HTTP server listening on %s (bin=%q mock=%v)", *addr, *bin, *mock)
+		log.Printf("grasscutter HTTP server listening on %s (bin=%q mock=%v static=%q)", *addr, *bin, *mock, static)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}
@@ -95,4 +105,28 @@ func splitArgs(s string) []string {
 		return nil
 	}
 	return strings.Fields(s)
+}
+
+func defaultStaticDir() string {
+	candidates := []string{
+		"client/dist",
+		"../client/dist",
+	}
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		candidates = append([]string{
+			filepath.Join(dir, "client", "dist"),
+			filepath.Join(dir, "..", "client", "dist"),
+		}, candidates...)
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && st.IsDir() {
+			abs, err := filepath.Abs(c)
+			if err == nil {
+				return abs
+			}
+			return c
+		}
+	}
+	return "../client/dist"
 }

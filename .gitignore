@@ -10,3 +10,7 @@ config/config.yaml
 server/server
 server/grasscutter-server
 *.exe
+client/node_modules/
+client/dist/
+deploy/.stage/
+server/*.log

@@ -5,21 +5,31 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
 
 	"github.com/AndreyGurinV/grassCutter/server/internal/cli"
 )
 
 // Server exposes HTTP endpoints that drive the grasscutter CLI session.
 type Server struct {
-	runner *cli.Runner
+	runner    *cli.Runner
+	staticDir string
+}
+
+// Options configures the HTTP API server.
+type Options struct {
+	StaticDir string
 }
 
 // New creates an API server backed by the given CLI runner.
-func New(runner *cli.Runner) *Server {
-	return &Server{runner: runner}
+func New(runner *cli.Runner, opts Options) *Server {
+	return &Server{runner: runner, staticDir: opts.StaticDir}
 }
 
-// Handler returns the root HTTP mux.
+// Handler returns the root HTTP mux (API + optional web UI).
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
@@ -30,7 +40,29 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /drive", s.handleDrive)
 	mux.HandleFunc("POST /wheel", s.handleWheel)
 	mux.HandleFunc("POST /calibrate-sweep", s.handleCalibrateSweep)
+	if s.staticDir != "" {
+		mux.Handle("/", spaFileServer(s.staticDir))
+	}
 	return mux
+}
+
+func spaFileServer(root string) http.Handler {
+	fs := http.FileServer(http.Dir(root))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		clean := path.Clean("/" + r.URL.Path)
+		if clean != "/" {
+			full := filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(clean, "/")))
+			if _, err := os.Stat(full); err != nil {
+				http.ServeFile(w, r, filepath.Join(root, "index.html"))
+				return
+			}
+		}
+		fs.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
