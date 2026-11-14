@@ -1,0 +1,20 @@
+[Unit]
+Description=grassCutter HTTP API + web UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=andrey
+Group=andrey
+WorkingDirectory=/home/andrey/grassCutter
+Environment=PATH=/home/andrey/grassCutter/.venv/bin:/usr/local/bin:/usr/bin
+# :8080 is used by another service on this Pi.
+ExecStart=/home/andrey/grassCutter/server/grasscutter-server -addr :8090 -bin /home/andrey/grassCutter/.venv/bin/grasscutter -static /home/andrey/grassCutter/client/dist
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
