@@ -44,12 +44,15 @@ GRASSCUTTER_MOCK=1 python -m grasscutter.cli drive --v 0.2 --w 0.1
 
 ## Карта GPIO (по умолчанию)
 
-| Сигнал | BCM |
-|---|---|
-| SDA / SCL | 2 / 3 |
-| DIR FL / FR / RL / RR | 17 / 27 / 22 / 23 |
-| ESTOP enable | 24 |
-| Status LED | 25 |
+| Сигнал | BCM | Контакт на разъёме Pi |
+|---|---|---|
+| 3.3 V (TXS VCCA) | — | **1** |
+| SDA | **GPIO2** | **3** |
+| SCL | **GPIO3** | **5** |
+| GND | — | **6** |
+| DIR FL / FR / RL / RR | 17 / 27 / 22 / 23 | см. header |
+| ESTOP enable | 24 | см. header |
+| Status LED | 25 | см. header |
 
 ## Безопасность
 

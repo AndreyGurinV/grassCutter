@@ -112,6 +112,9 @@ class CartController:
             self.stop()
             self._gpio.write(self.cfg.gpio.estop_en, 1)
             self._gpio.write(self.cfg.gpio.status_led, 1)
+            # On Pi Model B + RPi.GPIO, I2C writes in the next ~50ms after these
+            # GPIO edges are ACK'd but do not update MCP4728 registers.
+            time.sleep(0.05)
             self._armed = True
             log.info("ARMED — contactor enable HIGH")
 

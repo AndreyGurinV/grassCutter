@@ -5,19 +5,21 @@
 
 ## Блок-схема
 
+Нумерация Pi: **контакт разъёма (header)** ≠ **BCM GPIO**. I2C: **GPIO2 = контакт 3**, **GPIO3 = контакт 5**.
+
 ```mermaid
 flowchart TB
-  subgraph pi [Pi_Model_B_Rev2]
-    SDA[GPIO2_SDA]
-    SCL[GPIO3_SCL]
+  subgraph pi [Pi_Model_B_Rev2_26pin]
+    V33["P1_3V3"]
+    SDA["P3_GPIO2_SDA"]
+    SCL["P5_GPIO3_SCL"]
+    GND3["P6_GND"]
     G17[GPIO17_DIR_FL]
     G27[GPIO27_DIR_FR]
     G22[GPIO22_DIR_RL]
     G23[GPIO23_DIR_RR]
     G24[GPIO24_ESTOP]
     G25[GPIO25_STATUS]
-    V33[3V3]
-    GND3[GND]
   end
   subgraph board [Control_Board]
     LS[TXS0102DCTR]
@@ -49,6 +51,16 @@ flowchart TB
   GND3 --> SG
 ```
 
+### Контакты Raspberry Pi Model B Rev 2 (фрагмент)
+
+| Контакт (header) | BCM / сигнал | Куда на плате |
+|---|---|---|
+| **1** | **3.3 V** | TXS **VCCA**, OE |
+| **3** | **GPIO2 / SDA** | TXS **A1** |
+| **5** | **GPIO3 / SCL** | TXS **A2** |
+| **6** | **GND** | STAR_GND |
+| 2 / 4 | 5 V | только если питаете логику с Pi; иначе buck → VDD_5V |
+
 ## Критично по даташитам (исправления)
 
 | Было в старой схеме | По даташиту | Как правильно |
@@ -70,12 +82,68 @@ flowchart TB
 |---|---|---|
 | 1 | B2 | MCP4728 **SCL** |
 | 2 | GND | STAR_GND |
-| 3 | VCCA | Pi **3V3** + 100 nF к GND |
-| 4 | A2 | Pi GPIO3 **SCL** |
-| 5 | A1 | Pi GPIO2 **SDA** |
-| 6 | OE | к **VCCA** (всегда ON) *или* 10 кΩ pulldown к GND + подтянуть к VCCA после power-up |
+| 3 | VCCA | Pi **контакт 1 (3.3 V)** + 100 nF к GND |
+| 4 | A2 | Pi **контакт 5** = GPIO3 **SCL** |
+| 5 | A1 | Pi **контакт 3** = GPIO2 **SDA** |
+| 6 | OE | см. раздел **OE (Output Enable)** ниже |
 | 7 | VCCB | **VDD_5V** + 100 nF к GND |
 | 8 | B1 | MCP4728 **SDA** |
+
+#### OE (Output Enable) — подробно
+
+**Что делает OE:** вход разрешения, логика относительно **VCCA** (3.3 В).
+
+| Уровень OE | Поведение TXS0102 |
+|---|---|
+| **HIGH** (≥ ~0.65×VCCA) | каналы A↔B **работают** (перевод уровней I2C) |
+| **LOW** | все I/O в **Hi-Z** (отключены); внутренние pull-up 10 кΩ тоже выключены |
+
+Даташит (Power Supply Recommendations): при включении/выключении питания OE лучше держать **Low**, и поднимать в High **только когда VCCA и VCCB уже стабильны**. Повреждения от порядка подачи VCCA/VCCB нет, но на шине I2C во время «полупитания» возможны краткие глюки.
+
+---
+
+**Вариант A — OE всегда к VCCA (рекомендуется для прототипа тележки)**
+
+```
+Pi pin 1 (3.3 V) ──┬── TXS VCCA
+                   └── TXS OE
+```
+
+- Плюсы: ноль лишних деталей, I2C сразу живой как только есть 3.3 В.
+- Минусы: формально не «by the book» на время нарастания 5 В (VCCB), если buck поднимается заметно позже Pi.
+- Когда ок: buck 5 В и Pi питаются вместе / 5 В уже есть до загрузки ОС; один DAC на шине.
+
+**Вариант B — pulldown + включение после power-up (как в даташите)**
+
+```
+TXS OE ──┬──[10 kΩ]── GND          (по умолчанию OE = Low → Hi-Z)
+         │
+         └── к источнику High после стабилизации питания:
+               • перемычка/джumper на VCCA, или
+               • выход GPIO Pi (3.3 В), HIGH после boot
+```
+
+Последовательность:
+
+1. Подать питания: VCCA (3.3 В) и VCCB (5 В).
+2. Пока OE тянется 10 кΩ к GND — линии A/B в Hi-Z.
+3. Когда оба питания стабильны → соединить OE с VCCA (перемычка) **или** выставить GPIO = HIGH.
+4. После этого `i2cdetect` / работа с MCP4728.
+
+Минимум резистора pulldown: любой типичный **4.7–10 кΩ** к GND; 10 кΩ — нормальный выбор. Если OE ведёт GPIO, резистор pulldown всё равно полезен на время reset Pi (GPIO ещё не настроен).
+
+**Вариант C — OE с GPIO (гибкий)**
+
+```
+Pi GPIO (свободный, 3.3 В) ── TXS OE
+TXS OE ──[10 kΩ]── GND
+```
+
+В ПО после старта: дождаться питания → `GPIO.HIGH` на OE → затем I2C. В `grasscutter` сейчас этого нет; для прототипа не обязательно.
+
+---
+
+**Что ставить вам:** для первой сборки — **вариант A** (OE прямо на контакт 1 / VCCA). Если при включении I2C иногда «не видит» 0x60 или глючит — перейти на **B** или **C**.
 
 ### MCP4728-E/UN (MSOP-10)
 
@@ -97,13 +165,13 @@ flowchart TB
 ### 1. Питание логики
 
 ```
-Buck 5V ──── VDD_5V ──── MCP4728 VDD
-                      └── TXS0102 VCCB   (высокая сторона, 2.3…5.5 В)
+Buck 5V ──────── VDD_5V ──── MCP4728 VDD
+                           └── TXS0102 VCCB   (высокая сторона, 2.3…5.5 В)
 
-Pi 3V3  ──── VDD_3V3 ─── TXS0102 VCCA   (низкая сторона, 1.65…3.6 В)
-                      └── TXS0102 OE     (active High; см. выше)
+Pi pin 1 (3V3) ─ VDD_3V3 ─── TXS0102 VCCA   (низкая сторона, 1.65…3.6 В)
+                           └── TXS0102 OE     (active High; см. выше)
 
-Pi GND  ──── STAR_GND ── TXS GND, MCP4728 VSS, 4× throttle Black
+Pi pin 6 (GND) ─ STAR_GND ── TXS GND, MCP4728 VSS, 4× throttle Black
 ```
 
 Развязка:
@@ -115,9 +183,9 @@ Pi GND  ──── STAR_GND ── TXS GND, MCP4728 VSS, 4× throttle Black
 ### 2. I2C (правильная полярность TXS)
 
 ```
-Pi GPIO2 (SDA) ── TXS A1 ── B1 ── MCP4728 SDA
-Pi GPIO3 (SCL) ── TXS A2 ── B2 ── MCP4728 SCL
-Pi GND         ── TXS GND ── MCP4728 VSS
+Pi pin 3 / GPIO2 (SDA) ── TXS A1 ── B1 ── MCP4728 SDA
+Pi pin 5 / GPIO3 (SCL) ── TXS A2 ── B2 ── MCP4728 SCL
+Pi pin 6 (GND)         ── TXS GND ── MCP4728 VSS
 
 Pull-up: внутренние 10 кΩ TXS (A→VCCA, B→VCCB) + штатные ~1.8 кΩ на Pi к 3V3.
 Внешние 4.7 кΩ к 5 В НЕ обязательны. Добавлять только если шина «тяжёлая»
@@ -179,7 +247,7 @@ GPIO25 — status LED (330 Ω).
 
 | Разъём | Контакты |
 |---|---|
-| J_PI | 3V3, SDA, SCL, GPIO17/27/22/23/24/25, GND |
+| J_PI | pin1 3V3, pin3 SDA (GPIO2), pin5 SCL (GPIO3), pin6 GND, GPIO17/27/22/23/24/25 |
 | J_TH_FL…RR | SIG, GND (Red +5V контроллера не подключать) |
 | J_REV_FL…RR | пара reverse |
 | J_ESTOP | к катушке / драйверу |

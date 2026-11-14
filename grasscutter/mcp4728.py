@@ -40,10 +40,31 @@ class MockBus:
         log.debug("MockBus write addr=0x%02x cmd=0x%02x data=%s", addr, cmd, data)
 
 
-def open_smbus(bus_id: int) -> Bus:
-    from smbus2 import SMBus
+class TransientSMBus:
+    """Open/close ``/dev/i2c-*`` on every transfer.
 
-    return SMBus(bus_id)
+    A long-lived ``smbus2.SMBus`` fd on Pi + ``RPi.GPIO`` in the same process
+    can ACK writes while leaving MCP4728 registers unchanged. Fresh fds work.
+    """
+
+    def __init__(self, bus_id: int) -> None:
+        self.bus_id = int(bus_id)
+
+    def write_byte(self, addr: int, value: int) -> None:
+        from smbus2 import SMBus
+
+        with SMBus(self.bus_id) as bus:
+            bus.write_byte(addr, value)
+
+    def write_i2c_block_data(self, addr: int, cmd: int, data: list[int]) -> None:
+        from smbus2 import SMBus
+
+        with SMBus(self.bus_id) as bus:
+            bus.write_i2c_block_data(addr, cmd, data)
+
+
+def open_smbus(bus_id: int) -> Bus:
+    return TransientSMBus(bus_id)
 
 
 def _pack_channel(code: int, *, vref_vdd: bool = True) -> tuple[int, int]:
