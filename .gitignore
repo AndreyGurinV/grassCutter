@@ -7,3 +7,6 @@ build/
 config/config.yaml
 .pytest_cache/
 *.log
+server/server
+server/grasscutter-server
+*.exe
