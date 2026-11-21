@@ -172,19 +172,14 @@ class CartController:
         self.set_wheels([c.speed for c in cmds])
 
     def _apply_wheel(self, wheel: int, speed: float) -> None:
+        # Field note (Double Row 18): reverse latches only with SIG ≈ 0 V,
+        # and needs ~0.3–0.5 s at zero after the reverse contact changes.
         want_reverse = speed < 0
-        if want_reverse != self._dir_reverse[wheel] and abs(self._speeds[wheel]) > 1e-6:
-            # Coming from non-zero opposite — zero first
-            self._write_volts(wheel, 0.0)
-            self._speeds[wheel] = 0.0
-            time.sleep(self.cfg.direction_change_delay_s)
-        elif want_reverse != self._dir_reverse[wheel]:
-            # Already zero speed, still wait briefly for controller settle
-            time.sleep(self.cfg.direction_change_delay_s)
-
         if want_reverse != self._dir_reverse[wheel]:
+            self._write_volts(wheel, self.cfg.throttle.v_idle)
+            self._speeds[wheel] = 0.0
             self._set_reverse(wheel, want_reverse)
-            time.sleep(0.05)
+            time.sleep(self.cfg.direction_change_delay_s)
 
         mag = abs(speed)
         volts = speed_to_volts(mag, self.cfg.throttle) if mag > 0 else self.cfg.throttle.v_idle

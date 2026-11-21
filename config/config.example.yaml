@@ -21,8 +21,9 @@ throttle:
   v_start: 1.1
   v_max: 4.2
 
-# Seconds to wait at zero speed before flipping reverse.
-direction_change_delay_s: 0.35
+# Hold SIG at v_idle after flipping reverse contact before applying throttle.
+# Bench: controller latches reverse only at ~0 V and needs 0.3–0.5 s.
+direction_change_delay_s: 0.5
 
 # Clamp |v| and |w| in tank drive.
 drive:
